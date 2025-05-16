@@ -5,8 +5,9 @@ class MM:
         self.in_dim = in_dim
         self.out_dim = out_dim
         
-        self.W = np.random.randn(self.out_dim, self.in_dim) * 0.01
-        self.b = np.random.rand(out_dim, 1)
+        # He initalization for ReLU
+        self.W = np.random.randn(out_dim, in_dim) * np.sqrt(2.0 / in_dim)
+        self.b = np.zeros((out_dim, 1))
 
         self.layer_type = "MM"
 
@@ -55,35 +56,34 @@ class CE_loss:
     def backward(self, z, y):
         return softmax(z) - y
     
-class NN:
+class NN_minimal:
     def __init__(self, layers, loss, lr):
         self.layers = layers
         self.loss = loss
         self.lr = lr
 
     def train(self, x, y):
-        outputs = [x]
+        forwards = [x]
         for layer in self.layers:
-            outputs.append(layer.forward(outputs[-1]))
-        
-        J = self.loss.forward(outputs[-1], y)
+            forwards.append(layer.forward(forwards[-1]))
 
-        backwards = [self.loss.backward(outputs[-1], y)]
-        self.layers[-1].update_w_b(outputs[-2], backwards[-1], self.lr)
-        backwards.append(self.layers[-1].backward(backwards[-1]))
+        last_layer_output = forwards[-1]
+        J = self.loss.forward(last_layer_output, y)
 
-        for i in range(len(self.layers) - 2, -1, -1):
-            layer = self.layers[i]
-            
+        backwards = [self.loss.backward(last_layer_output, y)]
+
+        k = len(forwards) - 2
+        for layer in list(reversed(self.layers)):
             if layer.layer_type == "MM":
-                layer.update_w_b(outputs[i], backwards[-1], self.lr)
-                backwards.append(layer.backward(backwards[-1]))
-                
-            
-            if layer.layer_type == "ReLU":
-                backwards.append(layer.backward(outputs[i], backwards[-1]))
+                grad_z = layer.backward(backwards[-1])
+                layer.update_w_b(forwards[k], backwards[-1], self.lr)
+                backwards.append(grad_z)
+            elif layer.layer_type == "ReLU":
+                backwards.append(layer.backward(forwards[k], backwards[-1]))
+            k -= 1
 
         return J
+                
     
     def predict_proba(self, x):
         input = x
